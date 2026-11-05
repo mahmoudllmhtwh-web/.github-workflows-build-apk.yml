@@ -24,22 +24,42 @@ jobs:
           distribution: temurin
           java-version: 17
 
+      - name: Extract Game ZIP
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y unzip
+
+          if [ ! -f athar-arena-project.zip ]; then
+            echo "ERROR: ZIP file not found!"
+            exit 1
+          fi
+
+          mkdir -p extracted
+          unzip -o athar-arena-project.zip -d extracted
+
+          if [ ! -f extracted/athar-arena/package.json ]; then
+            echo "ERROR: package.json not found inside ZIP!"
+            find extracted -maxdepth 3 -type f
+            exit 1
+          fi
+
       - name: Install dependencies
+        working-directory: extracted/athar-arena
         run: npm install
 
       - name: Build web game
+        working-directory: extracted/athar-arena
         run: npm run build
 
       - name: Setup Android
+        working-directory: extracted/athar-arena
         run: |
-          if [ ! -d android ]; then
-            npx cap add android
-          fi
+          npx cap add android
           npx cap sync android
 
       - name: Build APK
+        working-directory: extracted/athar-arena/android
         run: |
-          cd android
           chmod +x gradlew
           ./gradlew assembleDebug
 
@@ -47,4 +67,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: Athar-Arena-APK
-          path: android/app/build/outputs/apk/debug/app-debug.apk
+          path: extracted/athar-arena/android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
