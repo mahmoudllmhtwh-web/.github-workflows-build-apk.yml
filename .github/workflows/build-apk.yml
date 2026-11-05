@@ -3,7 +3,8 @@ name: Build Android APK
 on:
   workflow_dispatch:
   push:
-    branches: [main]
+    branches:
+      - main
 
 jobs:
   build:
@@ -22,7 +23,7 @@ jobs:
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: 17
+          java-version: 21
 
       - name: Extract Game ZIP
         run: |
@@ -37,28 +38,38 @@ jobs:
           mkdir -p extracted
           unzip -o athar-arena-project.zip -d extracted
 
-          if [ ! -f extracted/athar-arena/package.json ]; then
-            echo "ERROR: package.json not found inside ZIP!"
-            find extracted -maxdepth 3 -type f
+          PACKAGE_FILE=$(find extracted -name package.json -type f | head -n 1)
+
+          if [ -z "$PACKAGE_FILE" ]; then
+            echo "ERROR: package.json not found!"
+            find extracted -maxdepth 4 -type f
             exit 1
           fi
 
+          PROJECT_DIR=$(dirname "$PACKAGE_FILE")
+          echo "PROJECT_DIR=$PROJECT_DIR" >> $GITHUB_ENV
+
+          echo "Game folder: $PROJECT_DIR"
+
       - name: Install dependencies
-        working-directory: extracted/athar-arena
         run: npm install
+        working-directory: ${{ env.PROJECT_DIR }}
 
       - name: Build web game
-        working-directory: extracted/athar-arena
         run: npm run build
+        working-directory: ${{ env.PROJECT_DIR }}
 
       - name: Setup Android
-        working-directory: extracted/athar-arena
+        working-directory: ${{ env.PROJECT_DIR }}
         run: |
-          npx cap add android
+          if [ ! -d android ]; then
+            npx cap add android
+          fi
+
           npx cap sync android
 
       - name: Build APK
-        working-directory: extracted/athar-arena/android
+        working-directory: ${{ env.PROJECT_DIR }}/android
         run: |
           chmod +x gradlew
           ./gradlew assembleDebug
@@ -67,5 +78,6 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: Athar-Arena-APK
-          path: extracted/athar-arena/android/app/build/outputs/apk/debug/app-debug.apk
+          path: ${{ env.PROJECT_DIR }}/android/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
+          retention-days: 7
